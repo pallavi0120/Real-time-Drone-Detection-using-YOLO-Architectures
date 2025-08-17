@@ -1,0 +1,54 @@
+!pip install ultralytics
+
+from google.colab import drive
+drive.mount('/content/drive')
+
+!unzip '/content/drive/MyDrive/YOLODronedataset1.zip' -d /content/data
+
+!cp  /content/drive/MyDrive/YOLODronedataset1/data.yaml /content/data/dataset1/data.yaml
+print('data.yaml exists:', os.path.exists('/content/data/dataset1/data.yaml'))
+with open('/content/data/dataset1/data.yaml','r') as f:
+    data_yaml_content=f.read()
+data_yaml_content = data_yaml_content.replace('C:/Users/Pallavi/Desktop/new/new/train/images', '/content/data/dataset1/images/train')
+data_yaml_content = data_yaml_content.replace('C:/Users/Pallavi/Desktop/new/new/valid/images', '/content/data/dataset1/images/val')
+data_yaml_content = data_yaml_content.replace('C:/Users/Pallavi/Desktop/new/new/test/images', '/content/data/dataset1/images/test')
+with open('/content/data.yaml','w') as f:
+    f.write(data_yaml_content)
+print("data.yaml is ready for training at /content/data.yaml")
+
+!ls /content/data/dataset1/images/train | head
+!ls /content/data/dataset1/labels/train | head
+
+data.yaml="""
+path: /content/data/dataset1
+
+train: images/train
+val: images/val
+test: images/test
+
+names: 
+  0: Drone
+"""
+with open('/content/data.yaml','w') as f:
+    f.write(data_yaml)
+print("data.yaml fixed and saved at /content/data.yaml")
+
+!yolo task=detect mode=train model=yolov8m.pt data=/content/data.yaml epochs=30 imgsz=640
+
+!find /content -type d -name "train2"
+
+!zip -r /content/drive/MyDrive/YOLODronedataset1/yolov8m_drone_train2.zip /content/drive/MyDrive/YOLODronedataset1/runs/detect/train2
+
+from google.colab import files
+files.download('/content/drive/MyDrive/YOLODronedataset1/yolov8m_drone_train2.zip')
+
+!yolo task=detect mode=val model=/content/drive/MyDrive/YOLODronedataset1/runs/detect/train2/weights/best.pt data=/content/data.yaml split=test
+
+import glob
+from IPython.display import Image
+predicted_images = glob.glob('/content/runs/detect/val/*.jpg')
+if predicted_images:
+    pred_img = predicted_images[0]
+    display(Image(filename=pred_img, width = 700))
+else:
+    print("No predicted images found in /content/runs/detect/val")
