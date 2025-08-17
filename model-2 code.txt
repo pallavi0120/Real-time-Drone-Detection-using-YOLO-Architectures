@@ -70,10 +70,10 @@ with zipfile.ZipFile("my_dataset.zip", 'r') as zip_ref:
 print("Re-extracted my_dataset.zip to restore the original folders")
 
 import os
-    for root, dirs, files in os.walk("/content/new"):
-        for d in dirs:
-            if "seq 1" in d.lower():
-                print("Found folder:", os.path.join(root, d))
+for root, dirs, files in os.walk("/content/new"):
+    for d in dirs:
+        if "seq 1" in d.lower():
+            print("Found folder:", os.path.join(root, d))
 
 import os
 import shutil
@@ -219,4 +219,5 @@ df.to_excel(excel_path, index=False)
 print(f"Excel saved at: {excel_path}")
 
 from google.colab import files
+
 files.download("/content/test_evaluation_results.xlsx")
