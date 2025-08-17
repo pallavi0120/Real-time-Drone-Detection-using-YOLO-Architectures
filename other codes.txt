@@ -1,0 +1,264 @@
+%%% CODE TO CONVERT ANNOTATIONS FROM JSON TO YOLO 
+
+import json
+import os
+
+json_path = r"C:\Users\Pallavi\Desktop\ML_dataset\train\20190925_101846_1_1\IR_label.json" #your sample
+output_dir = "labels"       
+img_width, img_height = 640, 512  # Image size from your sample
+
+os.makedirs(output_dir, exist_ok=True)
+
+with open(json_path, "r") as f:
+    data = json.load(f)
+
+exist_flags = data["exist"]
+boxes = data["gt_rect"]
+
+for idx, (exist, box) in enumerate(zip(exist_flags, boxes),start=1):
+    filename = f"{idx:06}.txt"      filepath = os.path.join(output_dir, filename)
+
+    if exist == 1:
+        x, y, w, h = box
+        x_center = (x + w / 2) / img_width
+        y_center = (y + h / 2) / img_height
+        w_norm = w / img_width
+        h_norm = h / img_height
+
+        with open(filepath, "w") as f:
+            f.write(f"0 {x_center:.6f} {y_center:.6f} {w_norm:.6f} {h_norm:.6f}\n")
+    else:
+        open(filepath, "w").close() 
+
+%%% CODE FOR NO. OF ANNOTATED AND UNANNOTATED FRAMES IN EACH SPLIT IN DATASET
+
+import os
+
+def count_annotated_images(images_dir, labels_dir):
+    total = 0
+    annotated = 0
+    unannotated = 0
+
+    for img_file in os.listdir(images_dir):
+        if not img_file.endswith(('.jpg', '.png','.JPEG')):
+            continue
+
+        total += 1
+        frame_id = os.path.splitext(img_file)[0]
+        label_path = os.path.join(labels_dir, frame_id + '.txt')
+
+        if os.path.exists(label_path) and os.path.getsize(label_path) > 0:
+            annotated += 1
+        else:
+            unannotated += 1
+
+    return total, annotated, unannotated
+
+dataset_root = r'C:\Users\Pallavi\Desktop\academics\ML internship\model 4--YOLOv8m--30 epochs--outdataset1\dataset1\dataset1'
+
+splits = ['train', 'val', 'test']
+
+for split in splits:
+    images_dir = os.path.join(dataset_root, 'images', split)
+    labels_dir = os.path.join(dataset_root, 'labels', split)
+
+    if not os.path.exists(images_dir) or not os.path.exists(labels_dir):
+        print(f"Skipping {split.upper()} - folders not found.")
+        continue
+
+    total, annotated, unannotated = count_annotated_images(images_dir, labels_dir)
+
+    print(f"\n{split.upper()} SET:")
+    print(f"Total Images      : {total}")
+    print(f"Annotated Images  : {annotated}")
+    print(f"Unannotated Images: {unannotated}")
+    print("-" * 40)
+
+%%% CODE FOR GETTING NO. OF SIZE-WISE DRONES IN EACH SPLIT IN DATASET
+
+import os
+
+IMG_WIDTH = 1280
+IMG_HEIGHT = 720  #these parameters change according to image
+
+def get_size_category(w, h):
+    pixel_area = w * IMG_WIDTH * h * IMG_HEIGHT
+    if pixel_area < 2880:
+        return 'small'
+    elif pixel_area < 25920:
+        return 'medium'
+    else:
+        return 'large'
+
+def count_drones_by_size(labels_dir):
+    size_counts = {'small': 0, 'medium': 0, 'large': 0}
+
+    for label_file in os.listdir(labels_dir):
+        if not label_file.endswith('.txt'):
+            continue
+
+        label_path = os.path.join(labels_dir, label_file)
+
+        with open(label_path, 'r') as f:
+            for line in f:
+                parts = line.strip().split()
+                if len(parts) >= 5:
+                    _, x, y, w, h = map(float, parts[:5])
+                    size = get_size_category(w, h)
+                    size_counts[size] += 1
+
+    return size_counts
+
+dataset_root = r'C:\Users\Pallavi\Desktop\academics\ML internship\model 4--YOLOv8m--30 epochs--outdataset1\dataset1\dataset1'
+splits = ['train', 'val', 'test']
+
+for split in splits:
+    labels_dir = os.path.join(dataset_root, 'labels', split)
+
+    if not os.path.exists(labels_dir):
+        print(f" Skipping {split.upper()} - labels folder not found.")
+        continue
+
+    counts = count_drones_by_size(labels_dir)
+
+    print(f"\n{split.upper()} SET:")
+    print(f"Small Drones  : {counts['small']}")
+    print(f"Medium Drones : {counts['medium']}")
+    print(f"Large Drones  : {counts['large']}")
+    print("-" * 40)
+
+%%% CODE FOR FLATTENING DATASET
+
+import os
+import shutil
+from pathlib import Path
+
+base_path = r"C:\Users\Pallavi\Desktop\academics\ML internship\new1\new"
+output_path = r"C:\Users\Pallavi\Desktop\flattened_dataset"
+
+splits = ['train', 'valid', 'test']
+subfolders = ['images', 'labels']
+
+for split in splits:
+    for sub in subfolders:
+        src_root = os.path.join(base_path, split, sub)
+        dst_root = os.path.join(output_path, sub, 'val' if split == 'valid' else split)
+        os.makedirs(dst_root, exist_ok=True)
+
+        seq_folders = list(Path(src_root).glob("*"))
+        print(f"\n[INFO] Processing: {split}/{sub} - Found {len(seq_folders)} seq folders")
+
+        for seq_path in seq_folders:
+            seq_name = seq_path.name.replace(" ", "_")
+            files = list(seq_path.glob("*.*"))
+            print(f"  → {seq_name}: {len(files)} files")
+
+            for file_path in files:
+                filename = file_path.name
+                new_name = f"{seq_name}_{filename}"
+                new_path = os.path.join(dst_root, new_name)
+                shutil.copy(str(file_path), new_path)
+
+print(" Done flattening and copying files.")
+
+%%% CODE FOR CONVERTING ANNOTATIONS FROM XML (PASCAL VOC) TO YOLO
+
+import os
+import xml.etree.ElementTree as ET
+
+input_dir = r'C:\Users\Pallavi\Downloads\test\test\xml'  
+output_dir = 'labels/'  
+
+os.makedirs(output_dir, exist_ok=True)
+
+class_mapping = {'UAV': 0}
+
+for xml_file in os.listdir(input_dir):
+    if not xml_file.endswith('.xml'):
+        continue
+
+    tree = ET.parse(os.path.join(input_dir, xml_file))
+    root = tree.getroot()
+
+    image_width = int(root.find('size/width').text)
+    image_height = int(root.find('size/height').text)
+
+    yolo_lines = []
+
+    for obj in root.findall('object'):
+        class_name = obj.find('name').text
+        class_id = class_mapping[class_name]
+
+        bbox = obj.find('bndbox')
+        xmin = int(bbox.find('xmin').text)
+        ymin = int(bbox.find('ymin').text)
+        xmax = int(bbox.find('xmax').text)
+        ymax = int(bbox.find('ymax').text)
+
+        x_center = (xmin + xmax) / 2.0 / image_width
+        y_center = (ymin + ymax) / 2.0 / image_height
+        width = (xmax - xmin) / image_width
+        height = (ymax - ymin) / image_height
+
+        yolo_lines.append(f"{class_id} {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f}")
+
+    output_filename = xml_file.replace('.xml', '.txt')
+    with open(os.path.join(output_dir, output_filename), 'w') as f:
+        f.write('\n'.join(yolo_lines))
+
+%%% CODE FOR SPLITTING DATASET INTO TRAIN,TEST AND VALIDATION
+
+import os
+import random
+import shutil
+
+
+source_dir = r"C:\Users\Pallavi\Downloads\archive\Database1\Database1"
+target_dir = r"C:\Users\Pallavi\Downloads\archive\yolo_dataset"
+
+
+for split in ['train', 'val', 'test']:
+    os.makedirs(os.path.join(target_dir, 'images', split), exist_ok=True)
+    os.makedirs(os.path.join(target_dir, 'labels', split), exist_ok=True)
+
+
+valid_pairs = []
+image_files = [f for f in os.listdir(source_dir) if f.lower().endswith(('.jpg', '.jpeg'))]
+
+for img_file in image_files:
+    base_name = os.path.splitext(img_file)[0]
+    label_file = base_name + ".txt"
+
+    img_path = os.path.join(source_dir, img_file)
+    label_path = os.path.join(source_dir, label_file)
+
+    if os.path.exists(label_path):
+        valid_pairs.append((img_file, label_file))
+    else:
+        print(f" Skipping {img_file} – missing label {label_file}")
+
+print(f" Total valid image-label pairs: {len(valid_pairs)}")
+
+
+random.shuffle(valid_pairs)
+n = len(valid_pairs)
+train_end = int(0.8 * n)
+val_end = int(0.9 * n)
+
+splits = {
+    'train': valid_pairs[:train_end],
+    'val': valid_pairs[train_end:val_end],
+    'test': valid_pairs[val_end:]
+}
+
+
+for split_name, pairs in splits.items():
+    for img_file, label_file in pairs:
+        shutil.copy(os.path.join(source_dir, img_file), os.path.join(target_dir, 'images', split_name, img_file))
+        shutil.copy(os.path.join(source_dir, label_file), os.path.join(target_dir, 'labels', split_name, label_file))
+
+print(" Images and labels split into train, val, and test.")
+
+
+
+
